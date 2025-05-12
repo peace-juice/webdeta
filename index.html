@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>垃圾填埋模拟</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .main-content {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        
+        .garbage-list {
+            flex: 1;
+            min-width: 300px;
+        }
+        
+        .landfill-area {
+            flex: 1;
+            min-width: 300px;
+        }
+        
+        .result-panel {
+            flex: 1;
+            min-width: 300px;
+        }
+        
+        .draggable-item {
+            cursor: grab;
+            background-color: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 10px;
+            margin: 5px;
+            display: inline-block;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            transition: all 0.2s ease;
+        }
+        
+        .draggable-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .dragging {
+            opacity: 0.5;
+        }
+        
+        .ghost-element {
+            position: fixed;
+            pointer-events: none;
+            opacity: 0.7;
+            z-index: 100;
+            transform: scale(1.1);
+        }
+        
+        .landfill {
+            min-height: 300px;
+            border: 2px dashed #94a3b8;
+            border-radius: 8px;
+            background-image: url('https://ts1.tc.mm.bing.net/th/id/R-C.95c68fc77bb8a9cf4194464adfa87287?rik=itMerZYx%2fw%2fxEA&riu=http%3a%2f%2fwww.zsfangshen.com%2fupfile%2fEditor%2fimage%2f20180120%2f6365206338574027358051044.jpg&ehk=h6XwXSu1Rd9VuKZNp2rSYc9tyad8nCoQoep5zIdJmAU%3d&risl=&pid=ImgRaw&r=0');
+            background-size: cover;
+            background-position: center;
+            padding: 15px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+        }
+        
+        .landfill-item {
+            background-color: rgba(255, 255, 255, 0.8);
+            border: 1px solid #cbd5e1;
+            border-radius: 5px;
+            padding: 5px 10px;
+            margin: 5px;
+            display: inline-block;
+        }
+        
+        .result-card {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 15px;
+        }
+        
+        .btn {
+            background-color: #3b82f6;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-top: 10px;
+        }
+        
+        .btn:hover {
+            background-color: #2563eb;
+        }
+        
+        .btn:active {
+            transform: translateY(1px);
+        }
+        
+        @media (max-width: 768px) {
+            .main-content {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1 class="text-3xl font-bold text-gray-800">垃圾填埋模拟</h1>
+            <p class="text-gray-600">将不同类型的垃圾拖放到填埋场，查看降解时间和污染物信息</p>
+        </header>
+        
+        <main class="main-content">
+            <!-- 可拖动垃圾区域 -->
+            <section class="garbage-list">
+                <h2 class="text-xl font-semibold text-gray-700 mb-3">可拖动垃圾</h2>
+                <div id="garbage-container" class="grid grid-cols-2 gap-2">
+                    <div class="draggable-item" 
+                         data-garbage="塑料瓶" 
+                         data-degradation="450年" 
+                         data-pollutants="微塑料,有害化学物质">
+                        <i class="fa-solid fa-bottle-water mr-2"></i>塑料瓶
+                    </div>
+                    <div class="draggable-item" 
+                         data-garbage="玻璃瓶" 
+                         data-degradation="100万年" 
+                         data-pollutants="无（物理存在）">
+                        <i class="fa-solid fa-wine-bottle mr-2"></i>玻璃瓶
+                    </div>
+                    <div class="draggable-item" 
+                         data-garbage="易拉罐" 
+                         data-degradation="200年" 
+                         data-pollutants="重金属渗出">
+                        <i class="fa-solid fa-beer mr-2"></i>易拉罐
+                    </div>
+                    <div class="draggable-item" 
+                         data-garbage="快递纸箱" 
+                         data-degradation="2-3个月" 
+                         data-pollutants="少量有机分解物">
+                        <i class="fa-solid fa-box mr-2"></i>快递纸箱
+                    </div>
+                    <div class="draggable-item" 
+                         data-garbage="一次性筷子" 
+                         data-degradation="3-6个月" 
+                         data-pollutants="少量有机分解物">
+                        <i class="fa-solid fa-utensils mr-2"></i>一次性筷子
+                    </div>
+                    <div class="draggable-item" 
+                         data-garbage="沾血的纱布" 
+                         data-degradation="数月至数年" 
+                         data-pollutants="病原体,医疗废物">
+                        <i class="fa-solid fa-medkit mr-2"></i>沾血的纱布
+                    </div>
+                    <div class="draggable-item" 
+                         data-garbage="旧衣服" 
+                         data-degradation="2-200年" 
+                         data-pollutants="染料,微纤维">
+                        <i class="fa-solid fa-shirt mr-2"></i>旧衣服
+                    </div>
+                    <div class="draggable-item" 
+                         data-garbage="剩饭剩菜" 
+                         data-degradation="数周" 
+                         data-pollutants="甲烷,渗滤液">
+                        <i class="fa-solid fa-drumstick-bite mr-2"></i>剩饭剩菜
+                    </div>
+                    <div class="draggable-item" 
+                         data-garbage="秸秆" 
+                         data-degradation="6个月-1年" 
+                         data-pollutants="少量有机分解物">
+                        <i class="fa-solid fa-leaf mr-2"></i>秸秆
+                    </div>
+                    <div class="draggable-item" 
+                         data-garbage="混凝土" 
+                         data-degradation="极长（基本不降解）" 
+                         data-pollutants="碱性渗出物">
+                        <i class="fa-solid fa-building mr-2"></i>混凝土
+                    </div>
+                    <div class="draggable-item" 
+                         data-garbage="电池" 
+                         data-degradation="100年以上" 
+                         data-pollutants="汞,铅,镉等重金属">
+                        <i class="fa-solid fa-battery-full mr-2"></i>电池
+                    </div>
+                    <div class="draggable-item" 
+                         data-garbage="皮革" 
+                         data-degradation="25-40年" 
+                         data-pollutants="鞣制剂,染料">
+                        <i class="fa-solid fa-shoe-prints mr-2"></i>皮革
+                    </div>
+                    <div class="draggable-item" 
+                         data-garbage="焚烧残渣" 
+                         data-degradation="数十年至数百年" 
+                         data-pollutants="重金属（有可能）">
+                        <i class="fa-solid fa-ashes mr-2"></i>焚烧残渣
+                    </div>
+                </div>
+            </section>
+            
+            <!-- 填埋场区域 -->
+            <section class="landfill-area">
+                <h2 class="text-xl font-semibold text-gray-700 mb-3">填埋场</h2>
+                <div id="landfill" class="landfill">
+                    <div class="text-white bg-gray-700/70 px-4 py-2 rounded-lg">
+                        将垃圾拖到这里填埋
+                    </div>
+                </div>
+                <button id="analyze-btn" class="btn">
+                    <i class="fa-solid fa-flask mr-2"></i>分析填埋结果
+                </button>
+            </section>
+            
+            <!-- 结果展示区域 -->
+            <section class="result-panel">
+                <h2 class="text-xl font-semibold text-gray-700 mb-3">填埋结果</h2>
+                <div id="result" class="result-card">
+                    <div class="text-center text-gray-500 py-8">
+                        <i class="fa-solid fa-truck-ramp-box text-4xl mb-3"></i>
+                        <p>填埋垃圾后点击"分析填埋结果"按钮</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+    
+    <!-- 拖动时的幽灵元素 -->
+    <div id="ghost-element" class="ghost-element hidden"></div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const garbageItems = document.querySelectorAll('.draggable-item');
+            const landfill = document.getElementById('landfill');
+            const analyzeBtn = document.getElementById('analyze-btn');
+            const resultPanel = document.getElementById('result');
+            const ghostElement = document.getElementById('ghost-element');
+            
+            let draggedItem = null;
+            let analyzed = false; // 标记是否已分析
+            let isTouchDragging = false;
+            
+            // 设置拖拽事件
+            garbageItems.forEach(item => {
+                // 鼠标拖拽事件
+                item.addEventListener('dragstart', function(e) {
+                    draggedItem = this;
+                    e.dataTransfer.setData('text/plain', this.dataset.garbage);
+                    setTimeout(() => {
+                        this.classList.add('dragging');
+                    }, 0);
+                    
+                    // 设置幽灵元素
+                    ghostElement.innerHTML = this.innerHTML;
+                    ghostElement.className = 'ghost-element';
+                    ghostElement.classList.add('dragging');
+                    ghostElement.style.width = `${this.offsetWidth}px`;
+                    ghostElement.style.height = `${this.offsetHeight}px`;
+                    document.body.appendChild(ghostElement);
+                });
+                
+                item.addEventListener('dragend', function() {
+                    this.classList.remove('dragging');
+                    
+                    // 移除幽灵元素
+                    ghostElement.className = 'ghost-element hidden';
+                });
+                
+                // 触摸拖拽事件
+                item.addEventListener('touchstart', function(e) {
+                    draggedItem = this;
+                    isTouchDragging = true;
+                    
+                    // 设置幽灵元素
+                    ghostElement.innerHTML = this.innerHTML;
+                    ghostElement.className = 'ghost-element';
+                    ghostElement.classList.add('dragging');
+                    ghostElement.style.width = `${this.offsetWidth}px`;
+                    ghostElement.style.height = `${this.offsetHeight}px`;
+                    
+                    // 计算触摸位置和元素位置的偏移
+                    const rect = this.getBoundingClientRect();
+                    const touch = e.touches[0];
+                    const offsetX = touch.clientX - rect.left;
+                    const offsetY = touch.clientY - rect.top;
+                    
+                    // 移动幽灵元素
+                    ghostElement.style.left = `${touch.clientX - offsetX}px`;
+                    ghostElement.style.top = `${touch.clientY - offsetY}px`;
+                    
+                    document.body.appendChild(ghostElement);
+                    this.classList.add('dragging');
+                    
+                    // 防止页面滚动
+                    e.preventDefault();
+                });
+            });
+            
+            // 触摸移动事件
+            document.addEventListener('touchmove', function(e) {
+                if (!isTouchDragging || !draggedItem) return;
+                
+                const touch = e.touches[0];
+                
+                // 移动幽灵元素
+                ghostElement.style.left = `${touch.clientX - ghostElement.offsetWidth/2}px`;
+                ghostElement.style.top = `${touch.clientY - ghostElement.offsetHeight/2}px`;
+                
+                // 检查是否在填埋场上空
+                const landfillRect = landfill.getBoundingClientRect();
+                if (touch.clientX >= landfillRect.left && touch.clientX <= landfillRect.right &&
+                    touch.clientY >= landfillRect.top && touch.clientY <= landfillRect.bottom) {
+                    landfill.classList.add('border-primary');
+                } else {
+                    landfill.classList.remove('border-primary');
+                }
+                
+                // 防止页面滚动
+                e.preventDefault();
+            });
+            
+            // 触摸结束事件
+            document.addEventListener('touchend', function(e) {
+                if (!isTouchDragging || !draggedItem) return;
+                
+                isTouchDragging = false;
+                draggedItem.classList.remove('dragging');
+                
+                // 移除幽灵元素
+                ghostElement.className = 'ghost-element hidden';
+                
+                // 检查是否在填埋场上空
+                const landfillRect = landfill.getBoundingClientRect();
+                const touch = e.changedTouches[0];
+                
+                if (touch.clientX >= landfillRect.left && touch.clientX <= landfillRect.right &&
+                    touch.clientY >= landfillRect.top && touch.clientY <= landfillRect.bottom) {
+                    
+                    // 如果已经分析过，清空填埋场
+                    if (analyzed) {
+                        landfill.innerHTML = '';
+                        analyzed = false;
+                    }
+                    
+                    // 清除初始提示文本
+                    if (landfill.querySelector('.text-white')) {
+                        landfill.innerHTML = '';
+                    }
+                    
+                    // 创建已填埋垃圾项
+                    const landfillItem = document.createElement('div');
+                    landfillItem.className = 'landfill-item';
+                    landfillItem.innerHTML = draggedItem.innerHTML;
+                    landfillItem.dataset.garbage = draggedItem.dataset.garbage;
+                    landfillItem.dataset.degradation = draggedItem.dataset.degradation;
+                    landfillItem.dataset.pollutants = draggedItem.dataset.pollutants;
+                    
+                    // 添加到填埋场
+                    landfill.appendChild(landfillItem);
+                    
+                    // 启用分析按钮
+                    analyzeBtn.disabled = false;
+                }
+                
+                landfill.classList.remove('border-primary');
+                draggedItem = null;
+            });
+            
+            // 设置填埋场的拖放事件
+            landfill.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                this.classList.add('border-primary');
+            });
+            
+            landfill.addEventListener('dragleave', function() {
+                this.classList.remove('border-primary');
+            });
+            
+            landfill.addEventListener('drop', function(e) {
+                e.preventDefault();
+                this.classList.remove('border-primary');
+                
+                if (draggedItem) {
+                    // 如果已经分析过，清空填埋场
+                    if (analyzed) {
+                        this.innerHTML = '';
+                        analyzed = false;
+                    }
+                    
+                    // 清除初始提示文本
+                    if (this.querySelector('.text-white')) {
+                        this.innerHTML = '';
+                    }
+                    
+                    // 创建已填埋垃圾项
+                    const landfillItem = document.createElement('div');
+                    landfillItem.className = 'landfill-item';
+                    landfillItem.innerHTML = draggedItem.innerHTML;
+                    landfillItem.dataset.garbage = draggedItem.dataset.garbage;
+                    landfillItem.dataset.degradation = draggedItem.dataset.degradation;
+                    landfillItem.dataset.pollutants = draggedItem.dataset.pollutants;
+                    
+                    // 添加到填埋场
+                    this.appendChild(landfillItem);
+                    
+                    // 启用分析按钮
+                    analyzeBtn.disabled = false;
+                }
+            });
+            
+            // 分析按钮点击事件
+            analyzeBtn.addEventListener('click', function() {
+                const landfillItems = landfill.querySelectorAll('.landfill-item');
+                
+                if (landfillItems.length === 0) {
+                    resultPanel.innerHTML = `
+                        <div class="text-center text-red-500 py-8">
+                            <i class="fa-solid fa-exclamation-triangle text-4xl mb-3"></i>
+                            <p>填埋场中没有垃圾，请先拖放垃圾到填埋场</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // 计算降解时间和污染物
+                let degradationInfo = {};
+                let pollutants = new Set();
+                
+                landfillItems.forEach(item => {
+                    const garbageType = item.dataset.garbage;
+                    const degradationTime = item.dataset.degradation;
+                    const itemPollutants = item.dataset.pollutants.split(',');
+                    
+                    degradationInfo[garbageType] = degradationTime;
+                    itemPollutants.forEach(pollutant => {
+                        pollutants.add(pollutant.trim());
+                    });
+                });
+                
+                // 生成结果HTML
+                let degradationHTML = '<ul class="space-y-2">';
+                for (const [garbage, time] of Object.entries(degradationInfo)) {
+                    degradationHTML += `
+                        <li class="flex items-center">
+                            <i class="fa-solid fa-circle-check text-green-500 mr-2"></i>
+                            <span class="font-medium">${garbage}:</span> ${time}
+                        </li>
+                    `;
+                }
+                degradationHTML += '</ul>';
+                
+                let pollutantsHTML = '<ul class="space-y-2">';
+                pollutants.forEach(pollutant => {
+                    pollutantsHTML += `
+                        <li class="flex items-center">
+                            <i class="fa-solid fa-triangle-exclamation text-red-500 mr-2"></i>
+                            ${pollutant}
+                        </li>
+                    `;
+                });
+                pollutantsHTML += '</ul>';
+                
+                // 更新结果面板
+                resultPanel.innerHTML = `
+                    <div class="space-y-4">
+                        <div>
+                            <h3 class="font-semibold text-lg text-gray-800 mb-2">降解时间</h3>
+                            ${degradationHTML}
+                        </div>
+                        <div>
+                            <h3 class="font-semibold text-lg text-gray-800 mb-2">污染物</h3>
+                            ${pollutantsHTML}
+                        </div>
+                        <div class="mt-4 text-center text-blue-500">
+                            <p>再次拖放垃圾将清空当前填埋场</p>
+                        </div>
+                    </div>
+                `;
+                
+                // 标记为已分析
+                analyzed = true;
+            });
+            
+            // 初始禁用分析按钮
+            analyzeBtn.disabled = true;
+        });
+    </script>
+</body>
+</html>
